@@ -3,6 +3,7 @@ library cached_network_svg_image;
 import 'dart:developer';
 import 'dart:io';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:flutter_cache_manager/flutter_cache_manager.dart';
@@ -192,6 +193,23 @@ class _CachedNetworkSVGImageState extends State<CachedNetworkSVGImage>
       const SizedBox();
 
   Widget _buildSVGImage() {
+    if (kIsWeb || kIsWasm) {
+      return SvgPicture.network(
+        widget._url,
+        fit: widget._fit,
+        width: widget._width,
+        height: widget._height,
+        alignment: widget._alignment,
+        matchTextDirection: widget._matchTextDirection,
+        allowDrawingOutsideViewBox: widget._allowDrawingOutsideViewBox,
+        semanticsLabel: widget._semanticsLabel,
+        excludeFromSemantics: widget._excludeFromSemantics,
+        colorFilter: widget._colorFilter,
+        placeholderBuilder: widget._placeholderBuilder,
+        theme: widget._theme,
+      );
+    }
+
     if (_imageFile == null) return const SizedBox();
 
     return SvgPicture.file(
