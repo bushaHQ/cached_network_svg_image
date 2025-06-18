@@ -139,7 +139,7 @@ class _CachedNetworkSVGImageState extends State<CachedNetworkSVGImage>
         headers: widget._headers ?? {},
       );
 
-      _imageFile = file;
+      _imageFile = File.fromUri(file.uri);
       _isLoading = false;
 
       _setState();
