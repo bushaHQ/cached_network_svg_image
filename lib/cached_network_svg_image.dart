@@ -1,212 +1,176 @@
 library cached_network_svg_image;
 
-import 'dart:developer';
 import 'dart:io';
 
+import 'package:cached_network_svg_image/src/svg_loader.dart';
+import 'package:cached_network_svg_image/src/svg_loader_state.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter_svg/flutter_svg.dart';
 import 'package:flutter_cache_manager/flutter_cache_manager.dart';
+import 'package:flutter_svg/flutter_svg.dart';
 
-/// Builder function to create an error widget. This builder is called when
-/// the image failed loading, for example due to a 404 NotFound exception.
-typedef ErrorWidgetBuilder = Widget Function(BuildContext context, String url, Object error);
+typedef ImageWidgetBuilder = Widget Function(BuildContext context, Widget imageProvider);
+
+typedef PlaceholderWidgetBuilder = Widget Function(BuildContext context, String url);
+
+typedef ProgressIndicatorBuilder = Widget Function(BuildContext context, String url, DownloadProgress progress);
+
+typedef LoadingErrorWidgetBuilder = Widget Function(BuildContext context, String url, Object error);
 
 class CachedNetworkSVGImage extends StatefulWidget {
-  CachedNetworkSVGImage(
-    String url, {
+  const CachedNetworkSVGImage({
     Key? key,
-    String? cacheKey,
-    Widget? placeholder,
-    Widget? errorWidget,
-    double? width,
-    double? height,
-    Map<String, String>? headers,
-    BoxFit fit = BoxFit.contain,
-    AlignmentGeometry alignment = Alignment.center,
-    bool matchTextDirection = false,
-    bool allowDrawingOutsideViewBox = false,
-    String? semanticsLabel,
-    bool excludeFromSemantics = false,
-    SvgTheme theme = const SvgTheme(),
-    Duration fadeDuration = const Duration(milliseconds: 300),
-    ColorFilter? colorFilter,
-    WidgetBuilder? placeholderBuilder,
-    ErrorWidgetBuilder? errorBuilder,
-    BaseCacheManager? cacheManager,
-  }) : _url = url,
-       _cacheKey = cacheKey,
-       _placeholder = placeholder,
-       _errorWidget = errorWidget,
-       _width = width,
-       _height = height,
-       _headers = headers,
-       _fit = fit,
-       _alignment = alignment,
-       _matchTextDirection = matchTextDirection,
-       _allowDrawingOutsideViewBox = allowDrawingOutsideViewBox,
-       _semanticsLabel = semanticsLabel,
-       _excludeFromSemantics = excludeFromSemantics,
-       _theme = theme,
-       _fadeDuration = fadeDuration,
-       _colorFilter = colorFilter,
-       _errorBuilder = errorBuilder,
-       _placeholderBuilder = placeholderBuilder,
-       _cacheManager = cacheManager ?? DefaultCacheManager(),
-       super(key: key ?? ValueKey(url));
+    required this.imageUrl,
+    this.httpHeaders,
+    this.imageBuilder,
+    this.placeholder,
+    this.progressIndicatorBuilder,
+    this.errorWidget,
+    this.fadeDuration = const Duration(milliseconds: 500),
+    this.cacheManager,
+    this.cacheKey,
+    this.width,
+    this.height,
+    this.fit = BoxFit.contain,
+    this.alignment = Alignment.center,
+    this.matchTextDirection = false,
+    this.allowDrawingOutsideViewBox = false,
+    this.excludeFromSemantics = false,
+    this.semanticsLabel,
+    this.theme,
+    this.colorFilter,
+  }) : super(key: key);
 
-  final String _url;
-  final String? _cacheKey;
-  final Widget? _placeholder;
-  final Widget? _errorWidget;
-  final double? _width;
-  final double? _height;
-  final Map<String, String>? _headers;
-  final BoxFit _fit;
-  final AlignmentGeometry _alignment;
-  final bool _matchTextDirection;
-  final bool _allowDrawingOutsideViewBox;
-  final String? _semanticsLabel;
-  final bool _excludeFromSemantics;
-  final SvgTheme _theme;
-  final Duration _fadeDuration;
-  final ColorFilter? _colorFilter;
-  final ErrorWidgetBuilder? _errorBuilder;
-  final WidgetBuilder? _placeholderBuilder;
-  final BaseCacheManager _cacheManager;
+  final String imageUrl;
+  final ImageWidgetBuilder? imageBuilder;
+  final PlaceholderWidgetBuilder? placeholder;
+  final ProgressIndicatorBuilder? progressIndicatorBuilder;
+  final LoadingErrorWidgetBuilder? errorWidget;
+  final Duration fadeDuration;
+  final Map<String, String>? httpHeaders;
+  final BaseCacheManager? cacheManager;
+  final String? cacheKey;
+  final double? width;
+  final double? height;
+  final BoxFit fit;
+  final AlignmentGeometry alignment;
+  final bool matchTextDirection;
+  final bool allowDrawingOutsideViewBox;
+  final bool excludeFromSemantics;
+  final String? semanticsLabel;
+  final SvgTheme? theme;
+  final ColorFilter? colorFilter;
 
   @override
   State<CachedNetworkSVGImage> createState() => _CachedNetworkSVGImageState();
-
-  static Future<void> preCache(
-    String imageUrl, {
-    String? cacheKey,
-    BaseCacheManager? cacheManager,
-  }) {
-    final key = cacheKey ?? _generateKeyFromUrl(imageUrl);
-    cacheManager ??= DefaultCacheManager();
-    return cacheManager.downloadFile(key);
-  }
-
-  static Future<void> clearCacheForUrl(
-    String imageUrl, {
-    String? cacheKey,
-    BaseCacheManager? cacheManager,
-  }) {
-    final key = cacheKey ?? _generateKeyFromUrl(imageUrl);
-    cacheManager ??= DefaultCacheManager();
-    return cacheManager.removeFile(key);
-  }
-
-  static Future<void> clearCache({BaseCacheManager? cacheManager}) {
-    cacheManager ??= DefaultCacheManager();
-    return cacheManager.emptyCache();
-  }
-
-  static String _generateKeyFromUrl(String url) => url.split('?').first;
 }
 
-class _CachedNetworkSVGImageState extends State<CachedNetworkSVGImage>
-    with SingleTickerProviderStateMixin {
-  bool _isLoading = false;
-
-  Object? _error;
-  File? _imageFile;
-  late String _cacheKey;
-
-  late final AnimationController _controller;
-  late final Animation<double> _animation;
-
-  bool get _isError => _error != null;
+class _CachedNetworkSVGImageState extends State<CachedNetworkSVGImage> with SingleTickerProviderStateMixin {
+  late SvgImageLoader _loader;
+  late AnimationController _controller;
+  late Animation<double> _animation;
 
   @override
   void initState() {
     super.initState();
-    _cacheKey = widget._cacheKey ?? CachedNetworkSVGImage._generateKeyFromUrl(widget._url);
-    _controller = AnimationController(vsync: this, duration: widget._fadeDuration);
-    _animation = Tween(begin: 0.0, end: 1.0).animate(_controller);
-    _loadImage();
+    _controller = AnimationController(vsync: this, duration: widget.fadeDuration);
+    _animation = CurvedAnimation(parent: _controller, curve: Curves.easeIn);
+
+    _loader = SvgImageLoader(
+      url: widget.imageUrl,
+      cacheManager: widget.cacheManager ?? DefaultCacheManager(),
+      cacheKey: widget.cacheKey,
+      httpHeaders: widget.httpHeaders,
+    )..load();
   }
 
-  Future<void> _loadImage() async {
-    try {
-      _setToLoadingAfter15MsIfNeeded();
-
-      var file = (await widget._cacheManager.getFileFromMemory(_cacheKey))?.file;
-
-      file ??= await widget._cacheManager.getSingleFile(
-        widget._url,
-        key: _cacheKey,
-        headers: widget._headers ?? {},
-      );
-
-      _imageFile = File.fromUri(file.uri);
-      _isLoading = false;
-
-      _setState();
-
-      _controller.forward();
-    } catch (e) {
-      log('CachedNetworkSVGImage: $e');
-
-      _error = e;
-      _isLoading = false;
-
-      _setState();
+  @override
+  void didUpdateWidget(CachedNetworkSVGImage oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.imageUrl != widget.imageUrl) {
+      _loader.dispose();
+      _controller.reset();
+      _loader = SvgImageLoader(
+        url: widget.imageUrl,
+        cacheManager: widget.cacheManager ?? DefaultCacheManager(),
+        cacheKey: widget.cacheKey,
+        httpHeaders: widget.httpHeaders,
+      )..load();
     }
   }
-
-  void _setToLoadingAfter15MsIfNeeded() => Future.delayed(const Duration(milliseconds: 15), () {
-    if (!_isLoading && _imageFile == null && !_isError) {
-      _isLoading = true;
-      _setState();
-    }
-  });
-
-  void _setState() => mounted ? setState(() {}) : null;
 
   @override
   void dispose() {
+    _loader.dispose();
     _controller.dispose();
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
-    return SizedBox(width: widget._width, height: widget._height, child: _buildImage());
+    return SizedBox(
+      width: widget.width,
+      height: widget.height,
+      child: ValueListenableBuilder<SvgLoadingState>(
+        valueListenable: _loader,
+        builder: (context, state, child) {
+          if (state is SvgLoading) {
+            return _buildLoadingWidget(state.progress);
+          } else if (state is SvgLoaded) {
+            if (_controller.status != AnimationStatus.forward && _controller.status != AnimationStatus.completed) {
+              _controller.forward();
+            }
+            return _buildSVGImage(state.file);
+          } else if (state is SvgError) {
+            return _buildErrorWidget(state.error);
+          }
+          return const SizedBox();
+        },
+      ),
+    );
   }
 
-  Widget _buildImage() {
-    if (_isLoading) return _buildPlaceholderWidget();
-
-    if (_error case final error?) return _buildErrorWidget(error);
-
-    return FadeTransition(opacity: _animation, child: _buildSVGImage());
+  Widget _buildLoadingWidget(DownloadProgress? progress) {
+    if (widget.progressIndicatorBuilder case final indicator?) {
+      return indicator(context, widget.imageUrl, progress ?? const DownloadProgress('url', 0, 0));
+    }
+    return widget.placeholder?.call(context, widget.imageUrl) ?? const SizedBox();
   }
 
-  Widget _buildPlaceholderWidget() =>
-      widget._placeholderBuilder?.call(context) ?? widget._placeholder ?? const SizedBox();
+  Widget _buildErrorWidget(Object error) {
+    return widget.errorWidget?.call(context, widget.imageUrl, error) ?? _InternalPlaceHolderError(widget: widget);
+  }
 
-  Widget _buildErrorWidget(Object error) =>
-      widget._errorBuilder?.call(context, widget._url, error) ??
-      widget._errorWidget ??
-      const SizedBox();
+  Widget _buildSVGImage(File imageFile) {
+    final svgWidget = SvgPicture.file(
+      imageFile,
+      fit: widget.fit,
+      width: widget.width,
+      height: widget.height,
+      alignment: widget.alignment,
+      theme: widget.theme ?? const SvgTheme(),
+      colorFilter: widget.colorFilter,
+    );
 
-  Widget _buildSVGImage() {
-    if (_imageFile == null) return const SizedBox();
+    final animatedWidget = FadeTransition(
+      opacity: _animation,
+      child: widget.imageBuilder != null ? widget.imageBuilder!(context, svgWidget) : svgWidget,
+    );
 
-    return SvgPicture.file(
-      _imageFile!,
-      fit: widget._fit,
-      width: widget._width,
-      height: widget._height,
-      alignment: widget._alignment,
-      matchTextDirection: widget._matchTextDirection,
-      allowDrawingOutsideViewBox: widget._allowDrawingOutsideViewBox,
-      semanticsLabel: widget._semanticsLabel,
-      excludeFromSemantics: widget._excludeFromSemantics,
-      colorFilter: widget._colorFilter,
-      placeholderBuilder: widget._placeholderBuilder,
-      theme: widget._theme,
+    return animatedWidget;
+  }
+}
+
+class _InternalPlaceHolderError extends StatelessWidget {
+  const _InternalPlaceHolderError({required this.widget});
+
+  final CachedNetworkSVGImage widget;
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      width: widget.width,
+      height: widget.height,
+      child: const Center(child: Icon(Icons.error)),
     );
   }
 }

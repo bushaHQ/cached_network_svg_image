@@ -56,12 +56,11 @@ class _MyHomePageState extends State<MyHomePage> {
       ),
       body: Center(
         child: CachedNetworkSVGImage(
-          _imagesUrlList[_selectedIndex],
-          placeholderBuilder: (_) => const CircularProgressIndicator(color: Colors.green),
-          errorBuilder: (_, __, ___) => const Icon(Icons.error, color: Colors.red),
-          width: 250.0,
-          height: 250.0,
-          fadeDuration: const Duration(milliseconds: 700),
+          imageUrl: _imagesUrlList[_selectedIndex],
+          progressIndicatorBuilder: (context, url, downloadProgress) => CircularProgressIndicator(
+            color: Colors.red,
+          ),
+          errorWidget: (context, url, error) => Icon(Icons.error),
         ),
       ),
       floatingActionButton: FloatingActionButton(
