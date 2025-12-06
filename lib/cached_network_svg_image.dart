@@ -78,7 +78,7 @@ class _CachedNetworkSVGImageState extends State<CachedNetworkSVGImage> with Sing
     _loader = SvgImageLoader(
       url: widget.imageUrl,
       cacheManager: widget.cacheManager ?? DefaultCacheManager(),
-      cacheKey: widget.cacheKey,
+      cacheKey: widget.cacheKey ?? _generateKeyFromUrl(widget.imageUrl),
       httpHeaders: widget.httpHeaders,
     )..load();
   }
@@ -158,6 +158,8 @@ class _CachedNetworkSVGImageState extends State<CachedNetworkSVGImage> with Sing
 
     return animatedWidget;
   }
+
+  String _generateKeyFromUrl(String url) => url.split('?').first;
 }
 
 class _InternalPlaceHolderError extends StatelessWidget {
