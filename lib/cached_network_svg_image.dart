@@ -11,8 +11,7 @@ import 'package:flutter_cache_manager/flutter_cache_manager.dart';
 
 /// Builder function to create an error widget. This builder is called when
 /// the image failed loading, for example due to a 404 NotFound exception.
-typedef ErrorWidgetBuilder =
-    Widget Function(BuildContext context, String url, Object error);
+typedef ErrorWidgetBuilder = Widget Function(BuildContext context, String url, Object error);
 
 class CachedNetworkSVGImage extends StatefulWidget {
   CachedNetworkSVGImage(
@@ -80,21 +79,13 @@ class CachedNetworkSVGImage extends StatefulWidget {
   @override
   State<CachedNetworkSVGImage> createState() => _CachedNetworkSVGImageState();
 
-  static Future<void> preCache(
-    String imageUrl, {
-    String? cacheKey,
-    BaseCacheManager? cacheManager,
-  }) {
+  static Future<void> preCache(String imageUrl, {String? cacheKey, BaseCacheManager? cacheManager}) {
     final key = cacheKey ?? _generateKeyFromUrl(imageUrl);
     cacheManager ??= DefaultCacheManager();
     return cacheManager.downloadFile(key);
   }
 
-  static Future<void> clearCacheForUrl(
-    String imageUrl, {
-    String? cacheKey,
-    BaseCacheManager? cacheManager,
-  }) {
+  static Future<void> clearCacheForUrl(String imageUrl, {String? cacheKey, BaseCacheManager? cacheManager}) {
     final key = cacheKey ?? _generateKeyFromUrl(imageUrl);
     cacheManager ??= DefaultCacheManager();
     return cacheManager.removeFile(key);
@@ -108,8 +99,7 @@ class CachedNetworkSVGImage extends StatefulWidget {
   static String _generateKeyFromUrl(String url) => url.split('?').first;
 }
 
-class _CachedNetworkSVGImageState extends State<CachedNetworkSVGImage>
-    with SingleTickerProviderStateMixin {
+class _CachedNetworkSVGImageState extends State<CachedNetworkSVGImage> with SingleTickerProviderStateMixin {
   bool _isLoading = false;
 
   Object? _error;
@@ -124,13 +114,8 @@ class _CachedNetworkSVGImageState extends State<CachedNetworkSVGImage>
   @override
   void initState() {
     super.initState();
-    _cacheKey =
-        widget._cacheKey ??
-        CachedNetworkSVGImage._generateKeyFromUrl(widget._url);
-    _controller = AnimationController(
-      vsync: this,
-      duration: widget._fadeDuration,
-    );
+    _cacheKey = widget._cacheKey ?? CachedNetworkSVGImage._generateKeyFromUrl(widget._url);
+    _controller = AnimationController(vsync: this, duration: widget._fadeDuration);
     _animation = Tween(begin: 0.0, end: 1.0).animate(_controller);
     _loadImage();
   }
@@ -139,21 +124,11 @@ class _CachedNetworkSVGImageState extends State<CachedNetworkSVGImage>
     try {
       _setToLoadingAfter15MsIfNeeded();
 
-      var file = (await widget._cacheManager.getFileFromMemory(
-        _cacheKey,
-      ))?.file;
+      var file = (await widget._cacheManager.getFileFromMemory(_cacheKey))?.file;
 
-      file ??= await widget._cacheManager.getSingleFile(
-        widget._url,
-        key: _cacheKey,
-        headers: widget._headers ?? {},
-      );
+      file ??= await widget._cacheManager.getSingleFile(widget._url, key: _cacheKey, headers: widget._headers ?? {});
 
-      _imageFile = XFile(
-        file.path,
-        length: file.lengthSync(),
-        bytes: file.readAsBytesSync(),
-      );
+      _imageFile = XFile(file.path, length: file.lengthSync(), bytes: file.readAsBytesSync());
       _isLoading = false;
 
       _setState();
@@ -169,13 +144,12 @@ class _CachedNetworkSVGImageState extends State<CachedNetworkSVGImage>
     }
   }
 
-  void _setToLoadingAfter15MsIfNeeded() =>
-      Future.delayed(const Duration(milliseconds: 15), () {
-        if (!_isLoading && _imageFile == null && !_isError) {
-          _isLoading = true;
-          _setState();
-        }
-      });
+  void _setToLoadingAfter15MsIfNeeded() => Future.delayed(const Duration(milliseconds: 15), () {
+    if (!_isLoading && _imageFile == null && !_isError) {
+      _isLoading = true;
+      _setState();
+    }
+  });
 
   void _setState() => mounted ? setState(() {}) : null;
 
@@ -187,11 +161,7 @@ class _CachedNetworkSVGImageState extends State<CachedNetworkSVGImage>
 
   @override
   Widget build(BuildContext context) {
-    return SizedBox(
-      width: widget._width,
-      height: widget._height,
-      child: _buildImage(),
-    );
+    return SizedBox(width: widget._width, height: widget._height, child: _buildImage());
   }
 
   Widget _buildImage() {
@@ -203,14 +173,10 @@ class _CachedNetworkSVGImageState extends State<CachedNetworkSVGImage>
   }
 
   Widget _buildPlaceholderWidget() =>
-      widget._placeholderBuilder?.call(context) ??
-      widget._placeholder ??
-      const SizedBox();
+      widget._placeholderBuilder?.call(context) ?? widget._placeholder ?? const SizedBox();
 
   Widget _buildErrorWidget(Object error) =>
-      widget._errorBuilder?.call(context, widget._url, error) ??
-      widget._errorWidget ??
-      const SizedBox();
+      widget._errorBuilder?.call(context, widget._url, error) ?? widget._errorWidget ?? const SizedBox();
 
   Widget _buildSVGImage() {
     if (_imageFile == null) return const SizedBox();
@@ -237,19 +203,14 @@ class _SvgXFileLoader extends SvgLoader<Uint8List> {
   final XFile file;
 
   @override
-  Future<Uint8List> prepareMessage(BuildContext? context) async =>
-      (await file.readAsBytes()).buffer.asUint8List();
+  Future<Uint8List> prepareMessage(BuildContext? context) async => (await file.readAsBytes()).buffer.asUint8List();
 
   @override
-  String provideSvg(Uint8List? message) =>
-      utf8.decode(message!, allowMalformed: true);
+  String provideSvg(Uint8List? message) => utf8.decode(message!, allowMalformed: true);
 
   @override
   bool operator ==(Object other) =>
-      identical(this, other) ||
-      other is _SvgXFileLoader &&
-          runtimeType == other.runtimeType &&
-          file == other.file;
+      identical(this, other) || other is _SvgXFileLoader && runtimeType == other.runtimeType && file == other.file;
 
   @override
   int get hashCode => file.hashCode;
