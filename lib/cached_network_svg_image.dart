@@ -1,15 +1,18 @@
 library cached_network_svg_image;
 
+import 'dart:convert';
 import 'dart:developer';
-import 'dart:io';
+import 'dart:typed_data';
 
+import 'package:cross_file/cross_file.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:flutter_cache_manager/flutter_cache_manager.dart';
 
 /// Builder function to create an error widget. This builder is called when
 /// the image failed loading, for example due to a 404 NotFound exception.
-typedef ErrorWidgetBuilder = Widget Function(BuildContext context, String url, Object error);
+typedef ErrorWidgetBuilder =
+    Widget Function(BuildContext context, String url, Object error);
 
 class CachedNetworkSVGImage extends StatefulWidget {
   CachedNetworkSVGImage(
@@ -110,7 +113,7 @@ class _CachedNetworkSVGImageState extends State<CachedNetworkSVGImage>
   bool _isLoading = false;
 
   Object? _error;
-  File? _imageFile;
+  XFile? _imageFile;
   late String _cacheKey;
 
   late final AnimationController _controller;
@@ -121,8 +124,13 @@ class _CachedNetworkSVGImageState extends State<CachedNetworkSVGImage>
   @override
   void initState() {
     super.initState();
-    _cacheKey = widget._cacheKey ?? CachedNetworkSVGImage._generateKeyFromUrl(widget._url);
-    _controller = AnimationController(vsync: this, duration: widget._fadeDuration);
+    _cacheKey =
+        widget._cacheKey ??
+        CachedNetworkSVGImage._generateKeyFromUrl(widget._url);
+    _controller = AnimationController(
+      vsync: this,
+      duration: widget._fadeDuration,
+    );
     _animation = Tween(begin: 0.0, end: 1.0).animate(_controller);
     _loadImage();
   }
@@ -131,7 +139,9 @@ class _CachedNetworkSVGImageState extends State<CachedNetworkSVGImage>
     try {
       _setToLoadingAfter15MsIfNeeded();
 
-      var file = (await widget._cacheManager.getFileFromMemory(_cacheKey))?.file;
+      var file = (await widget._cacheManager.getFileFromMemory(
+        _cacheKey,
+      ))?.file;
 
       file ??= await widget._cacheManager.getSingleFile(
         widget._url,
@@ -139,7 +149,11 @@ class _CachedNetworkSVGImageState extends State<CachedNetworkSVGImage>
         headers: widget._headers ?? {},
       );
 
-      _imageFile = File.fromUri(file.uri);
+      _imageFile = XFile(
+        file.path,
+        length: file.lengthSync(),
+        bytes: file.readAsBytesSync(),
+      );
       _isLoading = false;
 
       _setState();
@@ -155,12 +169,13 @@ class _CachedNetworkSVGImageState extends State<CachedNetworkSVGImage>
     }
   }
 
-  void _setToLoadingAfter15MsIfNeeded() => Future.delayed(const Duration(milliseconds: 15), () {
-    if (!_isLoading && _imageFile == null && !_isError) {
-      _isLoading = true;
-      _setState();
-    }
-  });
+  void _setToLoadingAfter15MsIfNeeded() =>
+      Future.delayed(const Duration(milliseconds: 15), () {
+        if (!_isLoading && _imageFile == null && !_isError) {
+          _isLoading = true;
+          _setState();
+        }
+      });
 
   void _setState() => mounted ? setState(() {}) : null;
 
@@ -172,7 +187,11 @@ class _CachedNetworkSVGImageState extends State<CachedNetworkSVGImage>
 
   @override
   Widget build(BuildContext context) {
-    return SizedBox(width: widget._width, height: widget._height, child: _buildImage());
+    return SizedBox(
+      width: widget._width,
+      height: widget._height,
+      child: _buildImage(),
+    );
   }
 
   Widget _buildImage() {
@@ -184,7 +203,9 @@ class _CachedNetworkSVGImageState extends State<CachedNetworkSVGImage>
   }
 
   Widget _buildPlaceholderWidget() =>
-      widget._placeholderBuilder?.call(context) ?? widget._placeholder ?? const SizedBox();
+      widget._placeholderBuilder?.call(context) ??
+      widget._placeholder ??
+      const SizedBox();
 
   Widget _buildErrorWidget(Object error) =>
       widget._errorBuilder?.call(context, widget._url, error) ??
@@ -194,8 +215,8 @@ class _CachedNetworkSVGImageState extends State<CachedNetworkSVGImage>
   Widget _buildSVGImage() {
     if (_imageFile == null) return const SizedBox();
 
-    return SvgPicture.file(
-      _imageFile!,
+    return SvgPicture(
+      _SvgXFileLoader(_imageFile!, theme: widget._theme),
       fit: widget._fit,
       width: widget._width,
       height: widget._height,
@@ -206,7 +227,33 @@ class _CachedNetworkSVGImageState extends State<CachedNetworkSVGImage>
       excludeFromSemantics: widget._excludeFromSemantics,
       colorFilter: widget._colorFilter,
       placeholderBuilder: widget._placeholderBuilder,
-      theme: widget._theme,
     );
   }
+}
+
+class _SvgXFileLoader extends SvgLoader<Uint8List> {
+  const _SvgXFileLoader(this.file, {super.theme});
+
+  final XFile file;
+
+  @override
+  Future<Uint8List> prepareMessage(BuildContext? context) async =>
+      (await file.readAsBytes()).buffer.asUint8List();
+
+  @override
+  String provideSvg(Uint8List? message) =>
+      utf8.decode(message!, allowMalformed: true);
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is _SvgXFileLoader &&
+          runtimeType == other.runtimeType &&
+          file == other.file;
+
+  @override
+  int get hashCode => file.hashCode;
+
+  @override
+  String toString() => '_SvgXFileLoader(file: $file)';
 }
