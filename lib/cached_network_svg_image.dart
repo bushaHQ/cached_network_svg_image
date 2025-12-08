@@ -179,10 +179,12 @@ class _CachedNetworkSVGImageState extends State<CachedNetworkSVGImage> with Sing
       widget._errorBuilder?.call(context, widget._url, error) ?? widget._errorWidget ?? const SizedBox();
 
   Widget _buildSVGImage() {
-    if (_imageFile == null) return const SizedBox();
+    final imageFile = _imageFile;
+
+    if (imageFile == null) return const SizedBox();
 
     return SvgPicture(
-      _SvgXFileLoader(_imageFile!, theme: widget._theme),
+      _SvgXFileLoader(imageFile, theme: widget._theme),
       fit: widget._fit,
       width: widget._width,
       height: widget._height,
@@ -203,10 +205,15 @@ class _SvgXFileLoader extends SvgLoader<Uint8List> {
   final XFile file;
 
   @override
-  Future<Uint8List> prepareMessage(BuildContext? context) async => (await file.readAsBytes()).buffer.asUint8List();
+  Future<Uint8List> prepareMessage(_) async => (await file.readAsBytes()).buffer.asUint8List();
 
   @override
-  String provideSvg(Uint8List? message) => utf8.decode(message!, allowMalformed: true);
+  String provideSvg(Uint8List? message) {
+    final data = message;
+    if (data == null) throw StateError('SVG bytes are missing');
+
+    return utf8.decode(data, allowMalformed: true);
+  }
 
   @override
   bool operator ==(Object other) =>
